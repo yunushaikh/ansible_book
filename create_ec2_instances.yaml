@@ -1,0 +1,43 @@
+---
+- name: Launch EC2 Instances and Update Inventory
+  hosts: localhost
+  gather_facts: false
+  vars:
+    instance_count: 3  # Default number of instances
+    aws_region: "us-east-1"  # Default region
+
+  tasks:
+    - name: Launch EC2 instances
+      amazon.aws.ec2_instance:
+        aws_access_key: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+        aws_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+        region: "{{ aws_region }}"  # Use the specified region
+        key_name: your_key_pair  # Replace with your key pair name
+        instance_type: t3.medium
+        image_id: ami-0a0e5d9c7acc336f1  # Replace with your preferred AMI ID
+        count: "{{ instance_count }}"
+        instance_tags:
+          Name: "Ansible-EC2-Instance"
+        wait: yes
+        wait_timeout: 500
+        state: present
+      register: ec2
+
+    - name: Add EC2 instances to inventory
+      add_host:
+        name: "{{ item.public_dns_name }}"
+        ansible_host: "{{ item.public_ip_address }}"
+        ansible_user: ec2-user  # Replace with your SSH user
+        ansible_ssh_private_key_file: /path/to/your/key.pem  # Replace with your SSH key path
+      loop: "{{ ec2.instances }}"
+
+    - name: Create inventory file
+      copy:
+        dest: "./inventory"
+        content: |
+          [aws_instances]
+          {% for instance in ec2.instances %}
+          {{ instance.public_dns_name }} ansible_host={{ instance.public_ip_address }} ansible_user=ec2-user ansible_ssh_private_key_file=/path/to/your/key.pem
+          {% endfor %}
+      delegate_to: localhost
+

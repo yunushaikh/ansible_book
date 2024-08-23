@@ -1,0 +1,30 @@
+---
+- name: Append Group Replication Configuration to MySQL
+  hosts: percona_servers
+  become: yes
+  vars:
+    mysql_config_file: "/etc/mysql/mysql.conf.d/mysqld.cnf"
+    replication_template: "templates/group_replication.j2"
+
+  tasks:
+    - name: Backup existing MySQL configuration file
+      copy:
+        src: "{{ mysql_config_file }}"
+        dest: "{{ mysql_config_file }}.bak"
+        remote_src: yes
+        backup: yes
+
+    - name: Append Group Replication configuration from template
+      blockinfile:
+        path: "{{ mysql_config_file }}"
+        block: |
+          {% include replication_template %}
+        marker: "# {mark} Ansible managed Group Replication configuration"
+      notify: Restart MySQL
+
+  handlers:
+    - name: Restart MySQL
+      service:
+        name: mysql
+        state: restarted
+

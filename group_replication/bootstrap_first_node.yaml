@@ -1,0 +1,93 @@
+---
+- name: Bootstrap MySQL Group Replication on a specific host
+  hosts: "{{ target_host }}"
+  become: yes
+  vars_files:
+    - ../vault.yaml  # Encrypted vault file containing MySQL credentials
+  tasks:
+
+    - name: Check if MySQL is running
+      shell: systemctl is-active mysql
+      register: mysql_status
+      changed_when: false
+
+    - name: Start MySQL if not running
+      systemd:
+        name: mysql
+        state: started
+      when: mysql_status.stdout != "active"
+
+    - name: Get the IP address of the host
+      shell: |
+        getent hosts {{ inventory_hostname }} | awk '{ print $1 }'
+      register: ip_address
+      changed_when: false
+
+    - name: Display the IP address of the host
+      debug:
+        msg: "The IP address of {{ inventory_hostname }} is {{ ip_address.stdout }}"
+
+    - name: Check Group Replication member states
+      shell: |
+        mysql -u "{{ mysql_user }}" -p"{{ mysql_password }}" -e "
+        SELECT MEMBER_STATE, MEMBER_ROLE, MEMBER_HOST FROM performance_schema.replication_group_members;"
+      register: replication_status
+      environment:
+        MYSQL_PWD: "{{ mysql_password }}"
+
+    - name: Display Group Replication member states
+      debug:
+        msg: "{{ replication_status.stdout }}"
+
+    - name: Determine if bootstrap is needed
+      fail:
+        msg: "Group Replication has already been bootstrapped."
+      when: "'ONLINE' in replication_status.stdout and 'PRIMARY' in replication_status.stdout"
+
+    - name: Bootstrap Group Replication
+      shell: |
+        mysql -u "{{ mysql_user }}" -p"{{ mysql_password }}" -e "
+        SET GLOBAL group_replication_bootstrap_group=ON;
+        START GROUP_REPLICATION;
+        SET GLOBAL group_replication_bootstrap_group=OFF;"
+      register: bootstrap_result
+      environment:
+        MYSQL_PWD: "{{ mysql_password }}"
+      when: "'ONLINE' not in replication_status.stdout or 'PRIMARY' not in replication_status.stdout"
+
+    - name: Display bootstrap result
+      debug:
+        msg: "{{ bootstrap_result.stdout }}"
+      when: "'ONLINE' not in replication_status.stdout or 'PRIMARY' not in replication_status.stdout"
+
+    - name: Ensure Group Replication started successfully
+      shell: |
+        query="SELECT MEMBER_STATE, MEMBER_ROLE, MEMBER_HOST FROM performance_schema.replication_group_members WHERE MEMBER_HOST = '{{ ip_address.stdout }}';"
+        echo "Running query: $query"
+        mysql -u "{{ mysql_user }}" -p"{{ mysql_password }}" -e "$query"
+      register: final_status
+      environment:
+        MYSQL_PWD: "{{ mysql_password }}"
+      when: "'ONLINE' not in replication_status.stdout or 'PRIMARY' not in replication_status.stdout"
+
+    - name: Display final status
+      debug:
+        msg: |
+          Query: |
+            SELECT MEMBER_STATE, MEMBER_ROLE, MEMBER_HOST FROM performance_schema.replication_group_members
+            WHERE MEMBER_HOST = '{{ ansible_host }}';
+          Result: |
+            {{ final_status.stdout }}
+      when: "'ONLINE' not in replication_status.stdout or 'PRIMARY' not in replication_status.stdout"
+
+    - name: Check if Group Replication has ONLINE and PRIMARY status
+      fail:
+        msg: "Group Replication member is not ONLINE or PRIMARY on {{ ansible_host }}."
+      when: "'ONLINE' not in final_status.stdout or 'PRIMARY' not in final_status.stdout"
+      register: check_status
+
+    - name: Success message
+      debug:
+        msg: "Group Replication successfully bootstrapped and the node is ONLINE and PRIMARY on {{ ansible_host }}."
+      when: "'ONLINE' in final_status.stdout and 'PRIMARY' in final_status.stdout"
+

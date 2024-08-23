@@ -1,0 +1,56 @@
+---
+- name: Install Percona Server on EC2 instances
+  hosts: percona_servers
+  become: yes
+  tasks:
+    - name: Ensure necessary packages are installed on Debian-based systems
+      apt:
+        name: 
+          - gnupg
+          - lsb-release
+        state: present
+      when: ansible_facts['pkg_mgr'] == 'apt'
+
+    - name: Ensure necessary packages are installed on RHEL-based systems
+      yum:
+        name: yum-utils
+        state: present
+      when: ansible_facts['pkg_mgr'] == 'yum'
+
+    - name: Install Percona Server repository on Debian-based systems
+      apt:
+        deb: https://repo.percona.com/apt/percona-release_latest.generic_all.deb
+      when: ansible_facts['pkg_mgr'] == 'apt'
+
+    - name: Install Percona Server repository on RHEL-based systems
+      yum:
+        name: https://repo.percona.com/yum/percona-release-latest.noarch.rpm
+        state: present
+      when: ansible_facts['pkg_mgr'] == 'yum'
+
+    - name: Enable Percona Server repository on Debian-based systems
+      command: percona-release setup ps80
+      when: ansible_facts['pkg_mgr'] == 'apt'
+
+    - name: Enable Percona Server repository on RHEL-based systems
+      command: percona-release enable ps80
+      when: ansible_facts['pkg_mgr'] == 'yum'
+
+    - name: Install Percona Server on Debian-based systems
+      apt:
+        name: percona-server-server
+        state: present
+      when: ansible_facts['pkg_mgr'] == 'apt'
+
+    - name: Install Percona Server on RHEL-based systems
+      yum:
+        name: percona-server-server
+        state: present
+      when: ansible_facts['pkg_mgr'] == 'yum'
+
+    - name: Start and enable Percona Server
+      systemd:
+        name: mysql
+        state: started
+        enabled: true
+

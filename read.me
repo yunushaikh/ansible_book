@@ -1,0 +1,37 @@
+### Create inventory to edit your servers resolvable hostnames
+
+### add your key path to connect
+
+### Run the below playbook to install Percona Server 8.0 
+
+ansible-playbook -i inventory.ini install.yamli
+
+### Configure group replication parameters in j2 template file. place it under tempaltes directory. Make sure you edit the group seeds parameter as per IP address.
+
+Apply the append configuration playbook using the template to add group replication configuration
+
+
+### create a vault file to store mysql password
+
+cat vault.yaml
+mysql_user: root
+mysql_password: your_secure_password
+
+ansible-vault encrypt vault.yml
+
+### Provide the password for encryption
+
+### To edit password, you can use 
+ansible-vault edit vault.yaml
+
+### You can alternatively create a vault password file and place a password inside it,
+
+cat ./vault_password_file
+test1234
+
+ansible-vault edit vault.yaml --vault-password-file ./vault_password_file
+
+######## bootstrap first node
+ansible-playbook bootstrap_first_node.yaml --vault-password-file ../vault_password_file -e "target_host=ec2-107-22-158-244.compute-1.amazonaws.com" -i ../inventory.ini
+
+

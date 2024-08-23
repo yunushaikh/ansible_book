@@ -1,0 +1,18 @@
+disabled_storage_engines="MyISAM,BLACKHOLE,FEDERATED,ARCHIVE,MEMORY"
+server-id = {{ 1000 | random(seed=inventory_hostname) }}
+gtid_mode=ON
+enforce_gtid_consistency=ON
+log_bin=binlog
+log_slave_updates=ON
+binlog_format=ROW
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+transaction_write_set_extraction=XXHASH64
+plugin_load_add='group_replication.so'
+group_replication_group_name="291d8669-5fa0-11ef-b729-0affff71afbb"
+group_replication_start_on_boot=off
+group_replication_local_address= '{{ ansible_default_ipv4.address }}:33061'
+group_replication_group_seeds= "172.31.140.90:33061,172.31.140.98:33061,172.31.140.159:33061"
+group_replication_bootstrap_group=off
+skip-name-resolve
+report_host='{{ ansible_default_ipv4.address }}'
